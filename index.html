@@ -3443,8 +3443,8 @@ function icsOf(events, stamp) {
 }
 
 /* 고정비서 — 저장·화면 이동·공통 도구(알림·되돌리기·아래 창·칸 아래 오류·폰 연결) */
-const BUILD = '2026.10.26 18:40';                      // build.js가 만든 시각으로 바꿔 넣는다
-const BUILD_NO = '20261026184010';                 // 자동 업데이트 판 번호(yyyyMMddHHmmss, build.js가 넣음)
+const BUILD = '2026.10.26 18:46';                      // build.js가 만든 시각으로 바꿔 넣는다
+const BUILD_NO = '20261026184624';                 // 자동 업데이트 판 번호(yyyyMMddHHmmss, build.js가 넣음)
 const FORM_URL = ''.replace(/^__.*__$/, '');   // 신청서 받는 곳: PC 파일에만 build.js가 넣는다(공개 화면 파일·폰 화면에는 빈칸 → 폰은 APK 안 config.json)
 const KEY = 'gjbs.v1', AIKEY = 'gjbs.aikey';
 const Android = window.GjbsAndroid || null;     // 안드로이드 앱 안에서만 있음
@@ -4649,7 +4649,7 @@ SCREENS['#settings'] = () => {
     <div class="card"><div class="ctitle">데이터</div><div class="note" style="margin:4px 0 10px">모든 기록은 이 폰 안에만 있어요.</div>
       <div class="btnrow"><button class="btn g" data-act="demo">예시 데이터 보기</button><button class="btn g" data-act="reset">처음부터 다시</button></div></div>
     <div class="note">시험판: 사은품은 예시 금액이에요.${formUrl() ? '' : " '고정비서로 신청'은 받는 곳을 연결해야 담당자에게 가요."}</div>
-    <div class="card"><div class="ctitle">화면 판</div>${versionHtml()}</div>
+    <div class="card"><div class="ctitle">화면 판 (자동 업데이트)</div>${versionHtml()}</div>
     <div class="ver">고정비서 시험판 · ${BUILD}</div>
   </div>`;
 };
@@ -4688,7 +4688,7 @@ function versionHtml() {
   const hm = ms => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
   const st = wi.checking ? '확인하는 중…' : wi.ready ? `새 화면(${buildLabel(wi.ready).slice(5)} 판) 받아 둠`
     : { latest: '최신이에요', offline: '인터넷 연결 안 됨', 'bad-sig': '서명이 맞지 않아 안 받음', 'need-app': '앱을 다시 설치해야 받을 수 있어요' }[wi.state] || '';
-  const sub = ['자동 업데이트', wi.fromNet ? '인터넷에서 받은 판' : '앱에 든 판', wi.lastCheck ? `${hm(wi.lastCheck)} 확인` : '', st].filter(Boolean).join(' · ');
+  const sub = [wi.fromNet ? '인터넷에서 받은 판' : '앱에 든 판', wi.lastCheck ? `${hm(wi.lastCheck)} 확인` : '', st].filter(Boolean).join(' · ');   // 카드 제목이 '화면 판'이라 '자동 업데이트'는 빼고 짧게
   return `<div class="kv"><span class="k">${name}</span>${wi.ready ? '<button class="btn sm p" data-act="updApply">바꾸기</button>' : '<button class="btn sm g" data-act="updCheck">확인</button>'}</div><div class="note">${esc(sub)}</div>`;
 }
 ACT.updApply = () => { if (Android && Android.applyUpdate) { toast('새 화면으로 바꾸는 중…'); Android.applyUpdate(); } };
