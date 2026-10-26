@@ -3320,6 +3320,7 @@ function planOf(s, prices = PRICES) {
       st.kind = mv ? 'move' : online ? 'stayOnline' : 'stay';
       st.title = o.move === null ? '더 싼 요금제로 바꾸기' : !mv ? '요금제 바꾸기' : o.kind === '알뜰폰' ? (P.carrier === '알뜰폰' ? '다른 알뜰폰으로 옮기기' : '알뜰폰으로 옮기기') : ro(o.carrier) + ' 옮기기';
       st.desc = `${o.kind === '알뜰폰' ? o.name : o.carrier + ' ' + o.name} · 월 ${won(o.price)}원`;
+      st.to = (o.kind === '알뜰폰' ? o.name : o.carrier + ' ' + o.name).replace(/\s*\(온라인 전용\)/, '');   // 카드 회색 줄: '○○로 옮기기'
       if (o.move === null) st.warns.push(`지금 통신사가 ${o.carrier}가 아니면 번호이동이에요`);
       const stay = mv && planOptions(s, prices).opts.find(y => y.move === false);   // 옮기기 싫을 때 지금 통신사에서 고를 수 있는 것
       if (stay) st.alt = `안 옮기려면 ${stay.carrier} ${stay.name} 월 ${won(stay.price)}원도 있어요 · 월 ${won(stay.price + stay.loss - o.price - o.loss)}원 차이`;
@@ -3348,8 +3349,9 @@ function planOf(s, prices = PRICES) {
         st.title = re ? `${what} 재약정하기` : `${what} ${ro(b.carrier)} 바꾸기`;
         if (re) st.kind = 'netRe';   // 같은 회사는 설치 없이 전화로
         st.desc = `${b.title} 월 ${won(b.monthly)}원 · 3년에 ${won(c.save3y)}원 아껴요${b.support ? ` (${c.giftDemo ? '예시 ' : ''}사은품 ${won(b.support / 10000)}만 원 포함)` : ''}`;
+        st.to = b.carrier; st.save3y = c.save3y;
       } else st.desc = '지금 요금이 공식 최저 수준이에요 · 전화로 재약정 할인이나 사은품을 물어보세요';
-      st.when = dNet > 30 ? 'date' : 'now';
+      st.when = dNet > 30 ? 'date' : 'now'; st.dNet = dNet; st.end = N.contractEnd;
       if (dNet > 30) { st.date = shiftYmd(N.contractEnd, -30); st.warns.push(`약정이 ${md(N.contractEnd)}에 끝나요 · 한 달 전부터 알아보고, 끝난 뒤에 해지하세요`); }
       else if (dNet >= 0) st.warns.push(`약정이 ${md(N.contractEnd)}에 끝나요 · 끝난 뒤에 해지해야 위약금이 없어요`);
     } else if (x.id === 'unused') { st.title = x.ids.length === 1 ? subName(x.ids[0]) + ' 해지' : `구독 ${x.ids.length}개 해지`; st.warns.push(...lockOf(x.ids)); }
@@ -3443,8 +3445,8 @@ function icsOf(events, stamp) {
 }
 
 /* 고정비서 — 저장·화면 이동·공통 도구(알림·되돌리기·아래 창·칸 아래 오류·폰 연결) */
-const BUILD = '2026.10.26 19:53';                      // build.js가 만든 시각으로 바꿔 넣는다
-const BUILD_NO = '20261026195331';                 // 자동 업데이트 판 번호(yyyyMMddHHmmss, build.js가 넣음)
+const BUILD = '2026.10.26 20:17';                      // build.js가 만든 시각으로 바꿔 넣는다
+const BUILD_NO = '20261026201710';                 // 자동 업데이트 판 번호(yyyyMMddHHmmss, build.js가 넣음)
 const FORM_URL = ''.replace(/^__.*__$/, '');   // 신청서 받는 곳: PC 파일에만 build.js가 넣는다(공개 화면 파일·폰 화면에는 빈칸 → 폰은 APK 안 config.json)
 const KEY = 'gjbs.v1', AIKEY = 'gjbs.aikey';
 const Android = window.GjbsAndroid || null;     // 안드로이드 앱 안에서만 있음
@@ -4113,7 +4115,24 @@ const guideSrc = () => Object.values(GUIDES).filter(g => g && Array.isArray(g.sr
 const rival = (c, carrier) => { const xs = c.offers.filter(o => coOf(o.carrier) !== coOf(carrier)).map(o => o.monthly); return xs.length ? Math.min(...xs) : 0; };
 const warnBox = ws => (ws && ws.length ?`<div class="box warn">${ico('alert')}<div><b>먼저 알아 두세요</b><ul class="warns">${ws.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div></div>` : '');
 
-// ── 새는 돈 → 할 일 순서(컨설팅): 지금 바로 / 날짜가 되면 / 확인하면 더. 카드마다 걸리는 시간 · 주의할 점 · 다른 길 ──
+// 할 일 카드는 두 줄만: 굵게 '무엇이 얼마나 새는지(그대로 두면 손해)' · 회색 '무엇을 하면 되는지 · 몇 분'. 요금제 이름 · 주의할 점 · 다른 길은 접어 둔다
+const hookOf = x => {
+  const L = x.leak, yr = `1년에 ${won(x.amount * 12)}원`, nm = id => ((S.subs || []).find(s => s.id === id) || {}).name || '';
+  const names = (L.ids || [L.sub]).filter(Boolean).map(nm).join(', '), dd = x.dNet < 0 ? '약정 끝남' : `약정 D-${x.dNet}`;
+  const sub = (...xs) => xs.filter(Boolean).slice(0, 2).join(' · '), t = `${x.min}분`, at = x.date ? md(x.date) + '부터' : '';
+  switch (x.kind) {
+    case 'cancel': return [`해지하기로 한 ${L.ids.length > 1 ? `구독 ${L.ids.length}개` : names}, 아직 나가요`, sub('앱에서 해지', t)];
+    case 'overlap': case 'overlap2': case 'included': return [`${names}, 겹쳐서 내고 있어요`, String(x.desc).split('. ')[0].replace('유튜브 뮤직이 들어', '음악도 들어').replace('에 둘 다 들어', '에 들어')];   // 회색 줄은 한 줄에 들어가게
+    case 'move': case 'stay': case 'stayOnline': return [`같은 데이터인데 ${yr} 더 내요`, sub(at, `${ro(x.to)} ${x.kind === 'move' && L.move !== null ? '옮기기' : '바꾸기'}`, t)];
+    case 'sel': return [`25% 할인을 안 받아 ${yr} 더 내요`, sub('선택약정 신청', t)];
+    case 'addon': return [`부가서비스로 ${yr} 나가요`, sub('안 쓰면 끄기', t)];
+    case 'bundle': return [`결합 할인을 안 받아 ${yr} 더 내요`, sub('같은 통신사로 묶기', t)];
+    case 'net': case 'netRe': return [`그대로 두면 3년에 ${won(x.save3y)}원 더 내요`, sub(at || dd, x.kind === 'net' ? `${ro(x.to)} 바꾸기` : '전화로 재약정')];
+    case 'netEnd': return ['약정 끝날 때 가만있으면 사은품을 놓쳐요', sub(`${md(x.end)} 끝나요`, `전화 한 통 ${t}`)];
+    default: return [L.title, L.desc];   // 확인하면 더: 묻는 말 그대로
+  }
+};
+// ── 새는 돈 → 할 일 순서(컨설팅): 지금 바로 / 날짜가 되면 / 확인하면 더 ──
 SCREENS['#leaks'] = () => {
   const p = planOf(S), sure = p.sure, more = p.more;
   const pills = (act, opts) => `<span class="pills">${opts.map(([v, t, cls]) => `<button class="pill ${cls || ''}" data-act="${act}" data-v="${v}">${t}</button>`).join('')}</span>`;
@@ -4138,15 +4157,19 @@ SCREENS['#leaks'] = () => {
     if (a === 'addon') return `<button class="pill" data-act="leakAddon">끄는 법</button>`;
     return '';
   };
-  const card = x => `<div class="leak step" data-kind="${esc(x.kind)}"><span class="sno c-${stepCat(x)}">${x.no}</span><div>
-      ${x.date ? `<span class="badge o" style="margin:0 0 6px">${md(x.date)}부터</span>` : x.leak.badge ? `<span class="badge o" style="margin:0 0 6px">${x.leak.badge}</span>` : ''}
-      <h4>${esc(x.title)}</h4><div class="d">${esc(x.desc)}</div>
-      ${x.when !== 'ask' ? `<div class="meta">${ico('clock')}${x.min}분쯤${x.how ? ' · ' + esc(x.how) : ''}</div>` : ''}
-      ${x.warns.length ? `<ul class="warns">${x.warns.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
-      ${x.alt ? `<div class="alt">${esc(x.alt)}</div>` : ''}
-      ${x.kind === 'move' && pickAlt ? `<div class="alt sell"><b>고정비서로 신청하면 ${pick.kind === '알뜰폰' ? '알뜰폰' : esc(`${pick.company || pick.carrier} ${pick.name}`)} 월 ${won(pick.price)}원</b>가장 싼 것보다 매달 ${won(planSave(po.opts[0]) - planSave(pick))}원 더 내요</div>` : ''}</div>
-    <div class="bot">${x.amount ? `<span class="amt num">${x.sure ? '' : '최대 '}월 ${won(x.amount)}원</span>` : `<span class="amt0">${x.kind === 'netEnd' ? '아끼는 돈은 통화해 봐야 알아요' : ''}</span>`}${btnOf(x)}</div></div>`;
-  const group = (t, sub, xs) => xs.length ? `<div class="h3">${t}<span class="h3sub">${sub}</span></div>${xs.map(card).join('')}` : '';
+  // 접은 곳: 요금제 이름·값 → 주의할 점 → 다른 길 → 고정비서로 신청할 때의 차이
+  const foldOf = x => {
+    const what = ['move', 'stay', 'stayOnline', 'net', 'netRe', 'netEnd', 'bundle'].includes(x.kind) ? x.desc : '';
+    const sell = x.kind === 'move' && pickAlt ? `<div class="alt sell"><b>고정비서로 신청하면 ${pick.kind === '알뜰폰' ? '알뜰폰' : esc(`${pick.company || pick.carrier} ${pick.name}`)} 월 ${won(pick.price)}원</b>가장 싼 것보다 매달 ${won(planSave(po.opts[0]) - planSave(pick))}원 더 내요</div>` : '';
+    if (!what && !x.warns.length && !x.alt && !sell) return '';
+    return `<details class="fold"><summary>${x.warns.length ? `주의할 점 ${x.warns.length}개` : '자세히'}</summary>${what ? `<div class="alt">${esc(what)}</div>` : ''}
+      ${x.warns.length ? `<ul class="warns">${x.warns.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}${x.alt ? `<div class="alt">${esc(x.alt)}</div>` : ''}${sell}</details>`;
+  };
+  const card = x => { const [hook, sub] = hookOf(x); return `<div class="leak step" data-kind="${esc(x.kind)}"><span class="sno c-${stepCat(x)}">${x.no}</span><div>
+      <h4>${esc(hook)}</h4>${sub ? `<div class="d">${esc(sub).replace(/약정 D-([0-7])(?![0-9])/, '<b class="dd near">약정 D-$1</b>')}</div>` : ''}${foldOf(x)}</div>
+    <div class="bot">${x.amount ? `<span class="amt num">${x.sure ? '' : '최대 '}월 ${won(x.amount)}원</span>` : `<span class="amt0">${x.kind === 'netEnd' ? '통화해 봐야 알아요' : ''}</span>`}${btnOf(x)}</div></div>`; };
+  const group = (t, xs) => xs.length ? `<div class="h3">${t}</div>${xs.map(card).join('')}` : '';
+  const fix = p.steps.filter(x => x.when !== 'ask' && x.sure && x.amount > 0).length;
   const done = (S.done || []).map(d => `<div class="leak done">${ico('check')}<div><h4>${esc(d.title)}</h4><div class="d">${esc(d.date)} · 매달 ${won(d.amount)}원 아낌</div></div></div>`).join('');
   // 지금 → 정리하면: 두 막대로 한눈에
   const total = totalFee(S), after = Math.max(0, total - sure);
@@ -4155,14 +4178,14 @@ SCREENS['#leaks'] = () => {
     <div class="ba-r g"><span>정리하면</span><div class="bar"><i style="width:${Math.round(after / total * 100)}%"></i></div><b class="num">${won(after)}원</b></div></div>` : '';
   return `
 <div class="screen">
-  <div class="title">새는 돈 ${p.steps.length}곳</div>
-  <div class="lead">${sure ? `순서대로 하면 매달 <b class="num" style="color:var(--green-t)">${won(sure)}원</b> 아껴요 · 1년 ${won(sure * 12)}원` : '확실히 새는 곳은 아직 없어요'}${more ? ` · 확인하면 최대 ${won(more)}원 더` : ''}</div>
+  <div class="title">${sure ? `매달 <b class="num" style="color:var(--red-t)">${won(sure)}원</b>이 새요` : '새는 돈'}</div>
+  <div class="lead">${sure ? `${fix}곳만 막으면 1년에 ${won(sure * 12)}원 아껴요` : '확실히 새는 곳은 아직 없어요'}${more ? ` · 확인하면 최대 ${won(more)}원 더` : ''}</div>
   ${bars}
-  ${p.steps.length ? `<button class="rowcard report" data-act="go" data-to="#report">${ico('receipt')}<div><b>진단서 한 장으로 보기</b><span>할 일 3가지와 주의할 점 · 가족에게 보내기</span></div>${ico('right', 'chev')}</button>
-  ${group('지금 바로', '오늘 바로 할 수 있어요', p.now)}${group('날짜가 되면', '그 전에 미리 알려 드려요', p.later)}${group('확인하면 더 아껴요', '답하면 계획이 바로 바뀌어요', p.ask)}`
+  ${p.steps.length ? `<button class="rowcard report" data-act="go" data-to="#report">${ico('receipt')}<div><b>진단서 한 장으로 보기</b><span>가족에게 보내기</span></div>${ico('right', 'chev')}</button>
+  ${group('지금 바로', p.now)}${group('날짜가 되면', p.later)}${group('확인하면 더 아껴요', p.ask)}`
     : `<div class="empty"><img src="${IMG.cheer}" alt=""><b>새는 곳이 없어요</b><div class="muted">캡처를 올리면 더 꼼꼼히 찾아요</div><div class="gap"></div><button class="btn g" data-act="go" data-to="#import">캡처 올리기</button></div>`}
   ${done ? `<div class="h3">아낀 것</div>${done}` : ''}
-  <div class="note center" style="margin-top:8px">다음 점검 ${md(p.next.date)} · ${esc(p.next.why)}<br>가격은 ${md(PRICES.asof)} 공식 요금 기준 · 전화 영업 없음 · <button class="more inline" data-act="sources">출처 보기</button></div>
+  <div class="note center" style="margin-top:8px">${md(PRICES.asof)} 공식 요금 기준 · <button class="more inline" data-act="sources">출처 보기</button></div>
 </div>`;
 };
 ACT.setSel = el => { const v = el.dataset.v; withUndo(v === 'none' ? '할인 빠짐으로 넣었어요' : '할인을 받고 있는 걸로 넣었어요', () => { S.phone.sel = v; if (v === 'none') S.phone.contract = 'ended'; }); };
